@@ -1,0 +1,6 @@
+playbooks/rendered_command.txt
+playbooks/creds.yml
+*.pyc
+*.log
+inventories/prod/*.json
+inventories/dyn/*.yaml

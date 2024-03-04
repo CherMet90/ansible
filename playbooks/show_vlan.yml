@@ -1,0 +1,42 @@
+---
+- name: Execute templated command on Cisco devices
+  hosts: all
+  gather_facts: no
+  vars_files:
+    - creds.yml
+  vars:
+    ansible_network_os: cisco.ios.ios
+    ansible_connection: network_cli
+  vars_prompt:
+    - name: vlan_id
+      prompt: "Enter the VLAN ID"
+      private: no
+
+  tasks:
+    - name: Render command from Jinja2 template
+      ansible.builtin.template:
+        src: ../templates/show_vlan/cisco_sg.j2
+        dest: "./rendered_command.txt"
+      delegate_to: localhost
+      run_once: true
+
+    - name: Read the rendered command
+      ansible.builtin.slurp:
+        src: "./rendered_command.txt"
+      register: slurped_file
+      delegate_to: localhost
+      run_once: true
+
+    - name: Convert slurped content to a variable
+      ansible.builtin.set_fact:
+        vlan_command: "{{ (slurped_file['content'] | b64decode).strip() }}"
+
+    - name: Execute command on devices
+      ansible.netcommon.cli_command:
+        command: "{{ vlan_command }}"
+      connection: network_cli
+      register: command_output
+
+    - name: Show command output
+      ansible.builtin.debug:
+        var: command_output.stdout_lines

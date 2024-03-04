@@ -1,0 +1,61 @@
+---
+- name: Generate inventory for Cisco switches at UST site
+  hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Load device information from JSON
+      ansible.builtin.slurp:
+        src: ../inventories/prod/all_devices.json
+      register: json_data
+
+    - name: Convert JSON data into an object
+      ansible.builtin.set_fact:
+        devices_data: "{{ (json_data['content'] | b64decode | from_json)['hierarchy'] }}"
+
+    - name: Initialize access_switches
+      ansible.builtin.set_fact:
+        access_switches: []
+
+    - name: Initialize poe_switches
+      ansible.builtin.set_fact:
+        poe_switches: []
+
+    - name: "Prepare list of Cisco access switches matching model SG250, SG300, or SG350"
+      ansible.builtin.set_fact:
+        access_switches: "{{ access_switches + item['value'] }}"
+      loop: "{{ query('dict', devices_data['ust']['access-switch']['cisco']) | list }}"
+      when: "item.key is match('^sg(250|300|350)-.*$')"
+      loop_control:
+        loop_var: item
+
+    # Debug to verify access_switches contents
+    - name: "Debug access_switches"
+      ansible.builtin.debug:
+        msg: "{{ access_switches }}"
+
+    - name: "Prepare list of Cisco poe switches matching model SG250, SG300, or SG350"
+      ansible.builtin.set_fact:
+        poe_switches: "{{ poe_switches + item['value'] }}"
+      loop: "{{ query('dict', devices_data['ust']['poe-switch']['cisco']) | list }}"
+      when: "item.key is match('^sg(250|300|350)-.*$')"
+      loop_control:
+        loop_var: item
+
+    # Debug to verify poe_switches contents
+    - name: "Debug poe_switches"
+      ansible.builtin.debug:
+        msg: "{{ poe_switches }}"
+
+    - name: Combine all devices
+      ansible.builtin.set_fact:
+        devices: "{{ access_switches + poe_switches }}"
+
+    # Debug to verify combined devices
+    - name: "Debug combined devices"
+      ansible.builtin.debug:
+        msg: "{{ devices }}"
+
+    - name: Create Ansible inventory file for filtered Cisco switches at UST
+      ansible.builtin.template:
+        src: ../ansible_templates/network_devices_inventory.j2
+        dest: ../inventories/dyn/ust_cisco_sg.yaml

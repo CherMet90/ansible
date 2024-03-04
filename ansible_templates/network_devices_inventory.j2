@@ -1,0 +1,3 @@
+{% for device in devices %}
+{{ device.name }} ansible_host={{ device.primary_ip }}
+{% endfor %}

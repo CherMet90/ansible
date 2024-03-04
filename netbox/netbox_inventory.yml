@@ -1,0 +1,3 @@
+netbox_query:
+  path: 'dcim.devices'
+  action: 'all'

@@ -8,7 +8,7 @@
     export NETBOX_URL="http://your_netbox_instance.com"
     export NETBOX_TOKEN="your_netbox_api_token"
     ```
-    4.3 Применить новые настройки в текущей сессии терминала (вновых применится автоматом):
+    4.3 Применить новые настройки в текущей сессии терминала (в новых применится автоматом):
     ```
     source ~/.bashrc
     ```
@@ -30,5 +30,5 @@
     ansible-vault edit creds.yml
     ansible-vault view creds.yml
     ```
-8. К целевому списку устройств можно применить желаемый шаблон команд:  
+8. К целевому списку устройств можно применить желаемый шаблон команд. Запускать из папки с плейбуками:  
 `ansible-playbook -i ../inventories/dyn/ust_cisco_sg.yaml show_vlan.yml --ask-vault-pass`

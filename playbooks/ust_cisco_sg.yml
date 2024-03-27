@@ -5,7 +5,7 @@
   tasks:
     - name: Load device information from JSON
       ansible.builtin.slurp:
-        src: ../inventories/prod/all_devices.json
+        src: ../inventories/dev/all_devices.json
       register: json_data
 
     - name: Convert JSON data into an object
@@ -58,4 +58,4 @@
     - name: Create Ansible inventory file for filtered Cisco switches at UST
       ansible.builtin.template:
         src: ../ansible_templates/network_devices_inventory.j2
-        dest: ../inventories/dyn/ust_cisco_sg.yaml
+        dest: ../inventories/prod/ust_cisco_sg.yaml

@@ -11,11 +11,14 @@
     - name: vlan_id
       prompt: "Enter the VLAN ID"
       private: no
+    - name: template_name
+      prompt: "Enter the template name"
+      private: no
 
   tasks:
     - name: Render command from Jinja2 template
       ansible.builtin.template:
-        src: ../templates/show_vlan/cisco_sg.j2
+        src: ../templates/show_vlan/{{ template_name }}.j2
         dest: "./rendered_command.txt"
       delegate_to: localhost
       run_once: true

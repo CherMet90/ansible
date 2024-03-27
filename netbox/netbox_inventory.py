@@ -23,6 +23,9 @@ logger.info('Netbox generator successfully created')
 hierarchy = {}
 
 for device in devices:
+    if device.device_type.manufacturer.slug == 'noname':
+        continue
+    logger.info(f'Processing {device.name}...')
     site_name = device.site.slug if device.site else "Unknown"
     role_name = device.device_role.slug if device.device_role else "Unknown"
     manufacturer_name = device.device_type.manufacturer.slug if device.device_type.manufacturer else "Unknown"
@@ -38,10 +41,21 @@ for device in devices:
     if device_type_name not in hierarchy[site_name][role_name][manufacturer_name]:
         hierarchy[site_name][role_name][manufacturer_name][device_type_name] = []
 
+    # Fetch interfaces for the given device
+    interfaces = NetboxDevice.get_netbox_objects('dcim.interfaces', action='filter', device_id=device.id)
+    device_interfaces = []
+    for interface in interfaces:
+        device_interfaces.append({
+            "name": interface.name,
+            "type": interface.type.value,
+            "mode": interface.mode and str(interface.mode.value),
+        })
+    
     # Append the device to the appropriate list
     hierarchy[site_name][role_name][manufacturer_name][device_type_name].append({
         "name": device.name,
-        "primary_ip": device.primary_ip.address.split('/')[0] if device.primary_ip else "no_ip"
+        "primary_ip": device.primary_ip.address.split('/')[0] if device.primary_ip else "no_ip",
+        "interfaces": device_interfaces,
     })
 logger.info('Hierarchical organizing completed')
 

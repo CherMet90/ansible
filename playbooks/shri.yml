@@ -1,0 +1,87 @@
+---
+- name: Execute templated command on Cisco devices based on interface criteria
+  hosts: all
+  gather_facts: no
+  vars_files:
+    - creds.yml
+  vars:
+    ansible_network_os: cisco.ios.ios
+    ansible_connection: network_cli
+  vars_prompt:
+    - name: template_name
+      prompt: "Enter the template name"
+      private: no
+    - name: interface_type
+      prompt: "Enter the interface type(s) separated by comma (or 'any' for all types)"
+      private: no
+    - name: interface_mode
+      prompt: "Enter the interface mode(s) separated by comma (or 'any' for all modes)"
+      private: no
+
+  tasks:
+    - name: Ensure temp directory is absent
+      ansible.builtin.file:
+        path: "./temp"
+        state: absent
+      delegate_to: localhost
+      run_once: true
+
+    - name: Ensure temp directory exists
+      ansible.builtin.file:
+        path: "./temp"
+        state: directory
+      delegate_to: localhost
+      run_once: true
+
+    - name: Convert interface_type to list
+      set_fact:
+        interface_type_list: "{{ interface_type.split(',') }}"
+      when: interface_type != 'any'
+
+    - name: Convert interface_mode to list
+      set_fact:
+        interface_mode_list: "{{ interface_mode.split(',') }}"
+      when: interface_mode != 'any'
+
+    - name: Filter interfaces based on type and mode
+      set_fact:
+        selected_interfaces: "{{ selected_interfaces | default([]) + [item.key] }}"
+      with_dict: "{{ hostvars[inventory_hostname].interfaces }}"
+      loop_control:
+        loop_var: item
+      when: >
+        (interface_type == 'any' or item.value.type in interface_type_list) and 
+        (interface_mode == 'any' or item.value.mode in interface_mode_list)
+
+    - name: Debug selected_interfaces variable
+      ansible.builtin.debug:
+        var: selected_interfaces
+    
+    - name: Render command from Jinja2 template for selected interfaces
+      ansible.builtin.template:
+        src: "../templates/shri/{{ template_name }}.j2"
+        dest: "./temp/rendered_commands_{{ inventory_hostname }}.txt"
+      delegate_to: localhost
+
+    - name: Read the rendered command file
+      ansible.builtin.slurp:
+        src: "./temp/rendered_commands_{{ inventory_hostname }}.txt"
+      register: slurped_commands
+      delegate_to: localhost
+
+    - name: Convert slurped content to a variable
+      ansible.builtin.set_fact:
+        rendered_commands: "{{ (slurped_commands.content | b64decode | trim).split('\n') | reject('match', '^$') | list }}"
+
+    - name: Execute commands on the device
+      ansible.netcommon.cli_command:
+        command: "{{ item }}"
+      loop: "{{ rendered_commands }}"
+      when: item | trim != ""
+      register: command_output
+
+    - name: Save command output to a file
+      ansible.builtin.shell: 
+        cmd: "echo '{{ item.stdout_lines | to_nice_json }}' >> ./temp/execution_output.txt"
+      loop: "{{ command_output.results }}"
+      delegate_to: localhost

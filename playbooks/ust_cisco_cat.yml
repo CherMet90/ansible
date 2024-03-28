@@ -5,7 +5,7 @@
   tasks:
     - name: Load device information from JSON
       ansible.builtin.slurp:
-        src: ../inventories/dev/all_devices.json
+        src: ../inventories/prod/all_devices.json
       register: json_data
 
     - name: Convert JSON data into an object

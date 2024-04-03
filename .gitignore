@@ -6,3 +6,4 @@ inventories/prod/*.json
 inventories/dyn/*.yaml
 playbooks/temp/*
 inventories/dev/*
+inventories/prod/*

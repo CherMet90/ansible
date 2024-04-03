@@ -1,6 +1,57 @@
 ---
-- name: Execute templated command on Cisco devices
+- name: Setup dynamic group based on complex group logic with user inputs
   hosts: all
+  gather_facts: no
+  serial: 1
+  vars_prompt:
+    - name: must_have_groups
+      prompt: "Enter the must-have groups as regex (e.g., us_.*,cisco.*)"
+      private: no
+    - name: optional_groups
+      prompt: "Enter optional groups as regex, at least one must be present (e.g., poe_switch.*,access_switch.*)"
+      private: no
+
+  tasks:
+    - set_fact:
+        must_have_groups_list: "{{ must_have_groups.split(',') }}"
+        optional_groups_list: "{{ optional_groups.split(',') }}"
+    
+    - set_fact:
+        all_must_have_groups_present: true
+        optional_group_present: false
+
+    - name: Show list of group_names for host
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} belongs to groups: {{ group_names }}"
+    
+    - name: Validate all must-have groups are present
+      ansible.builtin.set_fact:
+        all_must_have_groups_present: "{{ all_must_have_groups_present and (group_names | select('match', item) | list | length > 0) }}"
+      loop: "{{ must_have_groups_list }}"
+    
+    - name: Check if any optional group is present
+      set_fact:
+        optional_group_present: true
+      when: group_names | select('match', item) | list | length > 0
+      loop: "{{ optional_groups_list }}"
+      loop_control:
+        extended: yes
+      until: optional_group_present or ansible_loop.last
+      retries: "{{ optional_groups_list | length }}"
+    
+    - ansible.builtin.debug:
+        msg: "Must-have groups present: {{ all_must_have_groups_present }}, Optional group present: {{ optional_group_present }}"
+    
+    - name: Add matching hosts to dynamic group based on conditions
+      add_host:
+        name: "{{ inventory_hostname }}"
+        groups: dynamic_group
+      when:
+        - all_must_have_groups_present
+        - optional_group_present
+
+- name: Execute templated command on Cisco devices
+  hosts: dynamic_group
   gather_facts: no
   vars_files:
     - creds.yml
@@ -16,30 +67,45 @@
       private: no
 
   tasks:
-    - name: Render command from Jinja2 template
-      ansible.builtin.template:
-        src: ../templates/show_vlan/{{ template_name }}.j2
-        dest: "./rendered_command.txt"
+    - name: Ensure temp directory is absent
+      ansible.builtin.file:
+        path: "./temp"
+        state: absent
       delegate_to: localhost
       run_once: true
 
-    - name: Read the rendered command
-      ansible.builtin.slurp:
-        src: "./rendered_command.txt"
-      register: slurped_file
+    - name: Ensure temp directory exists
+      ansible.builtin.file:
+        path: "./temp"
+        state: directory
       delegate_to: localhost
       run_once: true
+
+    - name: Render command from Jinja2 template for selected interfaces
+      ansible.builtin.template:
+        src: "../templates/show_vlan/{{ template_name }}.j2"
+        dest: "./temp/rendered_commands_{{ inventory_hostname }}.txt"
+      delegate_to: localhost
+
+    - name: Read the rendered command file
+      ansible.builtin.slurp:
+        src: "./temp/rendered_commands_{{ inventory_hostname }}.txt"
+      register: slurped_commands
+      delegate_to: localhost
 
     - name: Convert slurped content to a variable
       ansible.builtin.set_fact:
-        vlan_command: "{{ (slurped_file['content'] | b64decode).strip() }}"
+        rendered_commands: "{{ (slurped_commands.content | b64decode | trim).split('\n') | reject('match', '^$') | list }}"
 
-    - name: Execute command on devices
+    - name: Execute commands on the device
       ansible.netcommon.cli_command:
-        command: "{{ vlan_command }}"
-      connection: network_cli
+        command: "{{ item }}"
+      loop: "{{ rendered_commands }}"
+      when: item | trim != ""
       register: command_output
 
-    - name: Show command output
-      ansible.builtin.debug:
-        var: command_output.stdout_lines
+    - name: Save command output to a file
+      ansible.builtin.shell: 
+        cmd: "echo '{{ item.stdout_lines | to_nice_json }}' >> ./temp/execution_output.txt"
+      loop: "{{ command_output.results }}"
+      delegate_to: localhost

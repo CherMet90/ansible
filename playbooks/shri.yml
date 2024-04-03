@@ -5,10 +5,10 @@
   serial: 1
   vars_prompt:
     - name: must_have_groups
-      prompt: "Enter the must-have groups, separated by commas (e.g., ust,cisco)"
+      prompt: "Enter the must-have groups as regex (e.g., us_.*,cisco.*)"
       private: no
     - name: optional_groups
-      prompt: "Enter optional groups, at least one must be present, separated by commas (e.g., poe_switch,access_switch)"
+      prompt: "Enter optional groups as regex, at least one must be present (e.g., poe_switch.*,access_switch.*)"
       private: no
 
   tasks:
@@ -16,24 +16,28 @@
         must_have_groups_list: "{{ must_have_groups.split(',') }}"
         optional_groups_list: "{{ optional_groups.split(',') }}"
     
+    - set_fact:
+        all_must_have_groups_present: true
+        optional_group_present: false
+
     - name: Show list of group_names for host
       ansible.builtin.debug:
         msg: "{{ inventory_hostname }} belongs to groups: {{ group_names }}"
     
-    - name: Initialize an empty flag for optional group presence
-      set_fact:
-        optional_group_present: false
-      run_once: true
-    
-    - name: Check and flag if any optional group is present
-      set_fact:
-        optional_group_present: "{{ optional_groups_list | intersect(group_names) | length > 0 }}"
-      run_once: true
-      
     - name: Validate all must-have groups are present
+      ansible.builtin.set_fact:
+        all_must_have_groups_present: "{{ all_must_have_groups_present and (group_names | select('match', item) | list | length > 0) }}"
+      loop: "{{ must_have_groups_list }}"
+    
+    - name: Check if any optional group is present
       set_fact:
-        all_must_have_groups_present: "{{ must_have_groups_list | difference(group_names) | length == 0 }}"
-      run_once: true
+        optional_group_present: true
+      when: group_names | select('match', item) | list | length > 0
+      loop: "{{ optional_groups_list }}"
+      loop_control:
+        extended: yes
+      until: optional_group_present or ansible_loop.last
+      retries: "{{ optional_groups_list | length }}"
     
     - ansible.builtin.debug:
         msg: "Must-have groups present: {{ all_must_have_groups_present }}, Optional group present: {{ optional_group_present }}"
@@ -43,8 +47,8 @@
         name: "{{ inventory_hostname }}"
         groups: dynamic_group
       when:
-        - all_must_have_groups_present|default(true)
-        - optional_group_present|bool
+        - all_must_have_groups_present
+        - optional_group_present
 
 - name: Execute tasks on filtered hosts
   hosts: dynamic_group

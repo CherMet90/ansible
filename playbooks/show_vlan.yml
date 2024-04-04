@@ -1,8 +1,8 @@
 ---
-- name: Setup dynamic group based on complex group logic with user inputs
-  hosts: all
+- hosts: all
   gather_facts: no
-  serial: 1
+  # serial: 1
+
   vars_prompt:
     - name: must_have_groups
       prompt: "Enter the must-have groups as regex (e.g., us_.*,cisco.*)"
@@ -10,102 +10,28 @@
     - name: optional_groups
       prompt: "Enter optional groups as regex, at least one must be present (e.g., poe_switch.*,access_switch.*)"
       private: no
-
-  tasks:
-    - set_fact:
-        must_have_groups_list: "{{ must_have_groups.split(',') }}"
-        optional_groups_list: "{{ optional_groups.split(',') }}"
-    
-    - set_fact:
-        all_must_have_groups_present: true
-        optional_group_present: false
-
-    - name: Show list of group_names for host
-      ansible.builtin.debug:
-        msg: "{{ inventory_hostname }} belongs to groups: {{ group_names }}"
-    
-    - name: Validate all must-have groups are present
-      ansible.builtin.set_fact:
-        all_must_have_groups_present: "{{ all_must_have_groups_present and (group_names | select('match', item) | list | length > 0) }}"
-      loop: "{{ must_have_groups_list }}"
-    
-    - name: Check if any optional group is present
-      set_fact:
-        optional_group_present: true
-      when: group_names | select('match', item) | list | length > 0
-      loop: "{{ optional_groups_list }}"
-      loop_control:
-        extended: yes
-      until: optional_group_present or ansible_loop.last
-      retries: "{{ optional_groups_list | length }}"
-    
-    - ansible.builtin.debug:
-        msg: "Must-have groups present: {{ all_must_have_groups_present }}, Optional group present: {{ optional_group_present }}"
-    
-    - name: Add matching hosts to dynamic group based on conditions
-      add_host:
-        name: "{{ inventory_hostname }}"
-        groups: dynamic_group
-      when:
-        - all_must_have_groups_present
-        - optional_group_present
-
-- name: Execute templated command on Cisco devices
-  hosts: dynamic_group
-  gather_facts: no
-  vars_files:
-    - creds.yml
-  vars:
-    ansible_network_os: cisco.ios.ios
-    ansible_connection: network_cli
-  vars_prompt:
     - name: vlan_id
       prompt: "Enter the VLAN ID"
       private: no
     - name: template_name
-      prompt: "Enter the template name"
+      prompt: "Enter the template name (e.g., cisco_cat, cisco_sg)"
       private: no
-
+  
+  vars:
+    template_base_path: "../templates/show_vlan"
+    ansible_network_os: cisco.ios.ios
+    ansible_connection: network_cli
+  
+  vars_files:
+    - creds.yml
+  
   tasks:
-    - name: Ensure temp directory is absent
-      ansible.builtin.file:
-        path: "./temp"
-        state: absent
-      delegate_to: localhost
-      run_once: true
+    - name: Include dir management tasks
+      include_tasks: tasks/dir_management.yml
 
-    - name: Ensure temp directory exists
-      ansible.builtin.file:
-        path: "./temp"
-        state: directory
-      delegate_to: localhost
-      run_once: true
+    - name: Include dynamic group setup tasks
+      include_tasks: tasks/setup_dynamic_group.yml
 
-    - name: Render command from Jinja2 template for selected interfaces
-      ansible.builtin.template:
-        src: "../templates/show_vlan/{{ template_name }}.j2"
-        dest: "./temp/rendered_commands_{{ inventory_hostname }}.txt"
-      delegate_to: localhost
-
-    - name: Read the rendered command file
-      ansible.builtin.slurp:
-        src: "./temp/rendered_commands_{{ inventory_hostname }}.txt"
-      register: slurped_commands
-      delegate_to: localhost
-
-    - name: Convert slurped content to a variable
-      ansible.builtin.set_fact:
-        rendered_commands: "{{ (slurped_commands.content | b64decode | trim).split('\n') | reject('match', '^$') | list }}"
-
-    - name: Execute commands on the device
-      ansible.netcommon.cli_command:
-        command: "{{ item }}"
-      loop: "{{ rendered_commands }}"
-      when: item | trim != ""
-      register: command_output
-
-    - name: Save command output to a file
-      ansible.builtin.shell: 
-        cmd: "echo '{{ item.stdout_lines | to_nice_json }}' >> ./temp/execution_output.txt"
-      loop: "{{ command_output.results }}"
-      delegate_to: localhost
+    - name: Conditionally include template command execution tasks
+      include_tasks: tasks/template_command_execution.yml
+      when: is_dynamic_group_member | default(false)

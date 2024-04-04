@@ -1,0 +1,14 @@
+---
+- name: Ensure temp directory is absent
+  ansible.builtin.file:
+    path: "./temp"
+    state: absent
+  delegate_to: localhost
+  run_once: true
+
+- name: Ensure temp directory exists
+  ansible.builtin.file:
+    path: "./temp"
+    state: directory
+  delegate_to: localhost
+  run_once: true

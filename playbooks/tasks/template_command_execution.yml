@@ -1,0 +1,29 @@
+---
+- name: Render command from Jinja2 template for selected interfaces
+  ansible.builtin.template:
+    src: "{{ template_base_path }}/{{ template_name }}.j2"
+    dest: "./temp/rendered_commands_{{ inventory_hostname }}.txt"
+  delegate_to: localhost
+
+- name: Read the rendered command file
+  ansible.builtin.slurp:
+    src: "./temp/rendered_commands_{{ inventory_hostname }}.txt"
+  register: slurped_commands
+  delegate_to: localhost
+
+- name: Convert slurped content to a variable
+  ansible.builtin.set_fact:
+    rendered_commands: "{{ (slurped_commands.content | b64decode | trim).split('\n') | reject('match', '^$') | list }}"
+
+- name: Execute commands on the device
+  ansible.netcommon.cli_command:
+    command: "{{ item }}"
+  loop: "{{ rendered_commands }}"
+  when: item | trim != ""
+  register: command_output
+
+- name: Save command output to a file
+  ansible.builtin.shell: 
+    cmd: "echo '{{ item.stdout_lines | to_nice_json }}' >> ./temp/execution_output.txt"
+  loop: "{{ command_output.results }}"
+  delegate_to: localhost

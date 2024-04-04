@@ -1,8 +1,19 @@
+import argparse
 import yaml
 
 from custom_modules.netbox_connector import NetboxDevice
 from custom_modules.log import logger
 
+
+# Parse command-line arguments
+parser = argparse.ArgumentParser(description='Generate Ansible inventory from Netbox devices')
+parser.add_argument('-i', '--inventory-path', help='Path to the output Ansible inventory YAML file', required=True)
+parser.add_argument('-s', '--site-name', help='Filter devices by site name')
+parser.add_argument('-r', '--role-name', help='Filter devices by role name')
+parser.add_argument('-v', '--vendor-name', help='Filter devices by vendor name')
+parser.add_argument('-t', '--device-type-name', help='Filter devices by device type name')
+args = parser.parse_args()
+inventory_path = args.inventory_path
 
 # Load the configuration from the YAML file
 with open('netbox_inventory.yml', 'r') as file:
@@ -32,6 +43,14 @@ for device in devices:
     manufacturer_name = device.device_type.manufacturer.slug if device.device_type.manufacturer else "Unknown"
     device_type_name = device.device_type.slug if device.device_type else "Unknown"
 
+    # Check if the device matches the specified criteria
+    if (args.site_name and site_name != args.site_name) or \
+       (args.role_name and role_name != args.role_name) or \
+       (args.vendor_name and manufacturer_name != args.vendor_name) or \
+       (args.device_type_name and device_type_name != args.device_type_name):
+        logger.debug(f'Skipping device {device.display} as it does not meet the specified criteria')
+        continue
+    
     # Fetch interfaces for the given device
     interfaces = NetboxDevice.get_netbox_objects('dcim.interfaces', action='filter', device_id=device.id)
     device_interfaces = []
@@ -59,7 +78,6 @@ for device in devices:
 logger.info('Dynamic hierarchical organizing completed')
 
 # Write the inventory into a YAML file
-inventory_path = '../inventories/prod/all_devices.yml'
 with open(inventory_path, 'w') as f:
     yaml.dump(inventory, f, allow_unicode=True, sort_keys=False)
 logger.info('Ansible inventory YAML file created successfully')

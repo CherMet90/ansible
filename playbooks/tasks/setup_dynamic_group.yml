@@ -1,0 +1,43 @@
+---
+- set_fact:
+    must_have_groups_list: "{{ must_have_groups.split(',') }}"
+    optional_groups_list: "{{ optional_groups.split(',') }}"
+    all_must_have_groups_present: true
+    optional_group_present: false
+
+# - name: Show list of group_names for host
+#   ansible.builtin.debug:
+#     msg: "{{ inventory_hostname }} belongs to groups: {{ group_names }}"
+
+- name: Validate all must-have groups are present
+  ansible.builtin.set_fact:
+    all_must_have_groups_present: "{{ all_must_have_groups_present and (group_names | select('match', item) | list | length > 0) }}"
+  loop: "{{ must_have_groups_list }}"
+
+- name: Check if any optional group is present
+  set_fact:
+    optional_group_present: true
+  when: group_names | select('match', item) | list | length > 0
+  loop: "{{ optional_groups_list }}"
+  loop_control:
+    extended: yes
+  until: optional_group_present or ansible_loop.last
+  retries: "{{ optional_groups_list | length }}"
+
+# - ansible.builtin.debug:
+#     msg: "Must-have groups present: {{ all_must_have_groups_present }}, Optional group present: {{ optional_group_present }}"
+
+- name: Add matching hosts to dynamic group based on conditions and set fact immediately
+  block:
+    - add_host:
+        name: "{{ inventory_hostname }}"
+        groups: dynamic_group
+      when:
+        - all_must_have_groups_present
+        - optional_group_present
+
+    - set_fact:
+        is_dynamic_group_member: true
+  when:
+    - all_must_have_groups_present
+    - optional_group_present

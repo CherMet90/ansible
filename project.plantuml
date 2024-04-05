@@ -1,0 +1,77 @@
+@startuml
+!theme toy
+left to right direction
+skinparam packageStyle rect
+skinparam linetype curve
+
+' General structuring and grouping for clarity
+package "Ansible Project" {
+    package "netbox" {
+        [netbox_inventory.py] as netbox_inventory_py
+    }
+
+    package "playbooks" {
+        file shri_yml as "shri.yml\n----\nMain Ansible playbook"
+        package "tasks" {
+            file dir_management_yml as "dir_management.yml"
+            file setup_dynamic_group_yml as "setup_dynamic_group.yml\n----\nfilter devices by criteria"
+            file select_specific_interfaces_yml as "select_specific_interfaces.yml\n----\nfilter interfaces by criteria"
+            file template_command_execution_yml as "template_command_execution.yml"
+        }
+        file creds as "creds.yml"
+    }
+
+    note as GenNote
+        choose inventory path
+        using -i arg
+    end note
+
+    package "inventories" {
+        package "dev" {
+            [dev devices.yml] <<file>>
+        }
+        package "prod" {
+            [prod devices.yml] <<file>>
+        }
+    }
+
+    package "templates" {
+        package "shri" {
+            [vendor_model.j2] as template
+        }
+    }
+
+    [dynamic_group] as dynamic_group
+    note right of dynamic_group: filtered devices by criteria
+
+    [selected_interfaces] as selected_interfaces
+    note right of selected_interfaces: filtered interfaces by criteria
+
+    package "temp" {
+    
+    }
+}
+
+rectangle Devices {
+}
+
+' Specification of relations and flow
+netbox_inventory_py --> GenNote
+GenNote ..> [dev devices.yml]
+GenNote ..> [prod devices.yml]
+
+shri_yml -l-> creds : read
+shri_yml -u-> [prod devices.yml] : read
+shri_yml --> dir_management_yml : task 1
+shri_yml --> setup_dynamic_group_yml : task 2
+shri_yml --> select_specific_interfaces_yml : task 3 for\nis_dynamic_group_member
+shri_yml --> template_command_execution_yml : task 4 for\nis_dynamic_group_member
+
+dir_management_yml --> temp : clear/create
+setup_dynamic_group_yml --> dynamic_group : filters & adds hosts
+select_specific_interfaces_yml --> selected_interfaces : filters
+template_command_execution_yml --> Devices : executes commands
+template_command_execution_yml --> temp : "stores\nrendered commands\nand result output"
+template_command_execution_yml --> template : request commands
+
+@enduml

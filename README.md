@@ -1,7 +1,7 @@
-1. Скачать `[`custom_modules`](https://github.com/CherMet90/custom_python_modules.git)` в домашнюю директорию
+1. Скачать `["custom_modules"](https://github.com/CherMet90/custom_python_modules.git)` в домашнюю директорию
 2. Проваливаемся в скачанную папку, устанавливаем зависимости `pip install -r requirements.txt`
 3. Из папки `custom_modules` запускаем `pip install -e .`
-4. Добавить переменные окружения `$NETBOX_URL` и `$NETBOX_TOKEN`  
+4. Добавляем переменные окружения `$NETBOX_URL` и `$NETBOX_TOKEN`  
     4.1 `nano ~/.bashrc`  
     4.2 Добавляем строчки в конец файла, сохраняем, закрываем
     ```
@@ -12,7 +12,7 @@
     ```
     source ~/.bashrc
     ```
-5. Создать защищенное хранилище переменных плейбуков:  
+5. Создаем защищенное хранилище переменных плейбуков:  
     ```
     :~/ansible/playbooks$ ansible-vault create creds.yml
     ```

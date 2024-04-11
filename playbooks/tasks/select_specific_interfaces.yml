@@ -1,14 +1,4 @@
 ---
-- name: Convert interface_type to list
-  set_fact:
-    interface_type_list: "{{ interface_type.split(',') }}"
-  when: interface_type != 'any'
-
-- name: Convert interface_mode to list
-  set_fact:
-    interface_mode_list: "{{ interface_mode.split(',') }}"
-  when: interface_mode != 'any'
-
 - name: Filter interfaces based on type and mode
   set_fact:
     selected_interfaces: "{{ selected_interfaces | default([]) + [item.name] }}"

@@ -1,7 +1,5 @@
 ---
 - set_fact:
-    must_have_groups_list: "{{ must_have_groups.split(',') }}"
-    optional_groups_list: "{{ optional_groups.split(',') }}"
     all_must_have_groups_present: true
     optional_group_present: false
 

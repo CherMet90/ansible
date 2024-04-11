@@ -19,9 +19,10 @@
   
   vars:
     template_base_path: "../templates/show_vlan"
-    ansible_network_os: cisco.ios.ios
     ansible_connection: network_cli
-  
+    ansible_network_os: cisco.ios.ios
+    must_have_groups_list: "{{ must_have_groups.split(',') }}"
+    optional_groups_list: "{{ optional_groups.split(',') }}"
   vars_files:
     - creds.yml
   

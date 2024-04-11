@@ -24,7 +24,10 @@
     template_base_path: "../templates/shri"
     ansible_network_os: cisco.ios.ios
     ansible_connection: network_cli
-  
+    must_have_groups_list: "{{ must_have_groups.split(',') }}"
+    optional_groups_list: "{{ optional_groups.split(',') }}"
+    interface_type_list: "{{ interface_type.split(',') if interface_type != 'any' else ['any'] }}"
+    interface_mode_list: "{{ interface_mode.split(',') if interface_mode != 'any' else ['any'] }}"
   vars_files:
     - creds.yml
   
